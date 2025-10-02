@@ -1,0 +1,226 @@
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local LP = Players.LocalPlayer
+
+local IDS = {
+  ["12679349747"]=true, ["12679262353"]=true, ["13371507107"]=true,
+  ["104638798752451"]=true, ["133780647850998"]=true, ["91732646607540"]=true,
+  ["106263220300042"]=true, ["107373560832052"]=true, ["128947799183126"]=true,
+  ["73661496982291"]=true
+}
+
+local TOKENS = {
+  "wireframe","wire frame","glowing","lightning","thunder","aura","galaxy","glitch","suit","black"
+}
+
+local function isA(x,c) return typeof(x)=="Instance" and x:IsA(c) end
+local function isChar(m) return m and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") end
+local function lower(s) return tostring(s or ""):lower() end
+
+local function hasTok(s)
+  s = lower(s)
+  for _,t in ipairs(TOKENS) do
+    if s == t or s:find(t, 1, true) then return true end
+  end
+  return false
+end
+
+local function getAssetId(inst)
+  local ok, v = pcall(function()
+    return inst:GetAttribute("OriginalAssetId") or inst:GetAttribute("AvatarAssetId") or inst:GetAttribute("AssetId")
+  end)
+  if ok and (typeof(v)=="number" or typeof(v)=="string") then return tostring(v) end
+  local function grab(n)
+    if not n then return nil end
+    if n:IsA("NumberValue") then return tostring(n.Value) end
+    if n:IsA("StringValue") then return n.Value end
+  end
+  local id = grab(inst:FindFirstChild("OriginalAssetId")) or grab(inst:FindFirstChild("AvatarAssetId")) or grab(inst:FindFirstChild("AssetId"))
+  if id then return id end
+  for _,d in ipairs(inst:GetDescendants()) do
+    id = grab(d)
+    if id then return id end
+  end
+  return nil
+end
+
+local function anyIdInText(s)
+  if not s or s=="" then return false end
+  s = tostring(s)
+  for id,_ in pairs(IDS) do
+    if s:find(id, 1, true) then return true end
+  end
+  return false
+end
+
+local function layeredClothing(acc)
+  local ok, at = pcall(function() return tostring(acc.AccessoryType):lower() end)
+  if ok and at then
+    for _,tok in ipairs({"jacket","shirt","tshirt","pants","sweater","dress","skirt","shorts","shoe","leftshoe","rightshoe"}) do
+      if at:find(tok, 1, true) then return true end
+    end
+  end
+  for _,d in ipairs(acc:GetDescendants()) do
+    if isA(d,"WrapLayer") or isA(d,"WrapTarget") then return true end
+  end
+  return false
+end
+
+local function accessoryHit(acc)
+  if layeredClothing(acc) then
+    return true
+  end
+  local id = getAssetId(acc)
+  if id and IDS[id] then
+    return true
+  end
+  if hasTok(acc.Name) then
+    return true
+  end
+  local h = acc:FindFirstChild("Handle")
+  if h and hasTok(h.Name) then
+    return true
+  end
+  for _,d in ipairs(acc:GetDescendants()) do
+    if isA(d,"SpecialMesh") then
+      local okA, meshId = pcall(function() return d.MeshId end)
+      local okB, texId  = pcall(function() return d.TextureId end)
+      local okC, tex    = pcall(function() return d.Texture end)
+      if (okA and (anyIdInText(meshId) or hasTok(meshId))) or
+         (okB and (anyIdInText(texId)  or hasTok(texId)))  or
+         (okC and (anyIdInText(tex)    or hasTok(tex))) then
+        return true
+      end
+    elseif isA(d,"MeshPart") then
+      local okA, meshId = pcall(function() return d.MeshId end)
+      local okB, texId  = pcall(function() return d.TextureID or d.TextureId end)
+      if (okA and (anyIdInText(meshId) or hasTok(meshId))) or
+         (okB and (anyIdInText(texId)  or hasTok(texId))) then
+        return true
+      end
+    elseif isA(d,"Decal") or isA(d,"Texture") then
+      local okT, tex = pcall(function() return d.Texture end)
+      if okT and (anyIdInText(tex) or hasTok(tex)) then
+        return true
+      end
+    elseif isA(d,"SurfaceAppearance") then
+      local okC, cMap = pcall(function() return d.ColorMap end)
+      local okM, mMap = pcall(function() return d.MetalnessMap end)
+      local okN, nMap = pcall(function() return d.NormalMap end)
+      local okR, rMap = pcall(function() return d.RoughnessMap end)
+      if (okC and (anyIdInText(cMap) or hasTok(cMap))) or
+         (okM and (anyIdInText(mMap) or hasTok(mMap))) or
+         (okN and (anyIdInText(nMap) or hasTok(nMap))) or
+         (okR and (anyIdInText(rMap) or hasTok(rMap))) then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+local function nuke(x)
+  if x and x.Parent then
+    pcall(function() x:Destroy() end)
+  end
+end
+
+local function stripChar(c)
+  if not c then return end
+  for _,d in ipairs(c:GetDescendants()) do
+    if isA(d,"Accessory") then
+      if accessoryHit(d) then nuke(d) end
+    elseif isA(d,"WrapLayer") or isA(d,"WrapTarget") or isA(d,"SurfaceAppearance") then
+      nuke(d)
+    elseif isA(d,"Highlight") or isA(d,"ForceField") then
+      nuke(d)
+    elseif isA(d,"ParticleEmitter") or isA(d,"Sparkles") or isA(d,"Fire") or isA(d,"Smoke") then
+      nuke(d)
+    elseif isA(d,"Trail") or isA(d,"Beam") then
+      nuke(d)
+    elseif isA(d,"BillboardGui") or isA(d,"SurfaceGui") then
+      nuke(d)
+    elseif isA(d,"PointLight") or isA(d,"SpotLight") or isA(d,"SurfaceLight") then
+      nuke(d)
+    elseif isA(d,"Decal") or isA(d,"Texture") then
+      nuke(d)
+    end
+  end
+end
+
+local function onChar(c)
+  if not c then return end
+  stripChar(c)
+  c.DescendantAdded:Connect(function(d)
+    if isA(d,"Accessory") then
+      if accessoryHit(d) then nuke(d) end
+    elseif isA(d,"WrapLayer") or isA(d,"WrapTarget") or isA(d,"SurfaceAppearance") then
+      nuke(d)
+    elseif isA(d,"Highlight") or isA(d,"ForceField") then
+      nuke(d)
+    elseif isA(d,"ParticleEmitter") or isA(d,"Sparkles") or isA(d,"Fire") or isA(d,"Smoke") then
+      nuke(d)
+    elseif isA(d,"Trail") or isA(d,"Beam") then
+      nuke(d)
+    elseif isA(d,"BillboardGui") or isA(d,"SurfaceGui") then
+      nuke(d)
+    elseif isA(d,"PointLight") or isA(d,"SpotLight") or isA(d,"SurfaceLight") then
+      nuke(d)
+    elseif isA(d,"Decal") or isA(d,"Texture") then
+      nuke(d)
+    end
+  end)
+end
+
+for _,p in ipairs(Players:GetPlayers()) do
+  if p.Character then onChar(p.Character) end
+  p.CharacterAdded:Connect(onChar)
+end
+
+Players.PlayerAdded:Connect(function(p)
+  p.CharacterAdded:Connect(onChar)
+end)
+
+Workspace.DescendantAdded:Connect(function(d)
+  if isA(d,"Highlight") or isA(d,"ForceField") then
+    local ok, ad = pcall(function() return d.Adornee end)
+    if ok and ad then
+      local m = ad:FindFirstAncestorOfClass("Model")
+      if isChar(m) then nuke(d) end
+    end
+  elseif d.ClassName=="ArcHandles" or d.ClassName=="Handles" then
+    nuke(d)
+  end
+end)
+
+for _,d in ipairs(Workspace:GetDescendants()) do
+  if isA(d,"Highlight") or isA(d,"ForceField") then
+    local ok, ad = pcall(function() return d.Adornee end)
+    if ok and ad then
+      local m = ad:FindFirstAncestorOfClass("Model")
+      if isChar(m) then nuke(d) end
+    end
+  elseif d.ClassName=="ArcHandles" or d.ClassName=="Handles" then
+    nuke(d)
+  end
+end
+
+for _,e in ipairs(Lighting:GetChildren()) do
+  if e:IsA("BloomEffect") or e:IsA("DepthOfFieldEffect") or e:IsA("ColorCorrectionEffect") or e:IsA("SunRaysEffect") or e:IsA("BlurEffect") then
+    nuke(e)
+  end
+end
+
+Lighting.ChildAdded:Connect(function(e)
+  if e:IsA("BloomEffect") or e:IsA("DepthOfFieldEffect") or e:IsA("ColorCorrectionEffect") or e:IsA("SunRaysEffect") or e:IsA("BlurEffect") then
+    nuke(e)
+  end
+end)
+
+pcall(function()
+  Lighting.GlobalShadows = false
+  Lighting.EnvironmentDiffuseScale = 0
+  Lighting.EnvironmentSpecularScale = 0
+  Lighting.Brightness = math.min(Lighting.Brightness, 1)
+end)
