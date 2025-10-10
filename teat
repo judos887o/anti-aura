@@ -3,122 +3,8 @@ local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local LP = Players.LocalPlayer
 
-local IDS = {
-  ["12679349747"]=true, ["12679262353"]=true, ["13371507107"]=true,
-  ["104638798752451"]=true, ["133780647850998"]=true, ["91732646607540"]=true,
-  ["106263220300042"]=true, ["107373560832052"]=true, ["128947799183126"]=true,
-  ["73661496982291"]=true
-}
-
-local TOKENS = {
-  "wireframe","wire frame","glowing","lightning","thunder","aura","galaxy","glitch","suit","black"
-}
-
 local function isA(x,c) return typeof(x)=="Instance" and x:IsA(c) end
 local function isChar(m) return m and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") end
-local function lower(s) return tostring(s or ""):lower() end
-
-local function hasTok(s)
-  s = lower(s)
-  for _,t in ipairs(TOKENS) do
-    if s == t or s:find(t, 1, true) then return true end
-  end
-  return false
-end
-
-local function getAssetId(inst)
-  local ok, v = pcall(function()
-    return inst:GetAttribute("OriginalAssetId") or inst:GetAttribute("AvatarAssetId") or inst:GetAttribute("AssetId")
-  end)
-  if ok and (typeof(v)=="number" or typeof(v)=="string") then return tostring(v) end
-  local function grab(n)
-    if not n then return nil end
-    if n:IsA("NumberValue") then return tostring(n.Value) end
-    if n:IsA("StringValue") then return n.Value end
-  end
-  local id = grab(inst:FindFirstChild("OriginalAssetId")) or grab(inst:FindFirstChild("AvatarAssetId")) or grab(inst:FindFirstChild("AssetId"))
-  if id then return id end
-  for _,d in ipairs(inst:GetDescendants()) do
-    id = grab(d)
-    if id then return id end
-  end
-  return nil
-end
-
-local function anyIdInText(s)
-  if not s or s=="" then return false end
-  s = tostring(s)
-  for id,_ in pairs(IDS) do
-    if s:find(id, 1, true) then return true end
-  end
-  return false
-end
-
-local function layeredClothing(acc)
-  local ok, at = pcall(function() return tostring(acc.AccessoryType):lower() end)
-  if ok and at then
-    for _,tok in ipairs({"jacket","shirt","tshirt","pants","sweater","dress","skirt","shorts","shoe","leftshoe","rightshoe"}) do
-      if at:find(tok, 1, true) then return true end
-    end
-  end
-  for _,d in ipairs(acc:GetDescendants()) do
-    if isA(d,"WrapLayer") or isA(d,"WrapTarget") then return true end
-  end
-  return false
-end
-
-local function accessoryHit(acc)
-  if layeredClothing(acc) then
-    return true
-  end
-  local id = getAssetId(acc)
-  if id and IDS[id] then
-    return true
-  end
-  if hasTok(acc.Name) then
-    return true
-  end
-  local h = acc:FindFirstChild("Handle")
-  if h and hasTok(h.Name) then
-    return true
-  end
-  for _,d in ipairs(acc:GetDescendants()) do
-    if isA(d,"SpecialMesh") then
-      local okA, meshId = pcall(function() return d.MeshId end)
-      local okB, texId  = pcall(function() return d.TextureId end)
-      local okC, tex    = pcall(function() return d.Texture end)
-      if (okA and (anyIdInText(meshId) or hasTok(meshId))) or
-         (okB and (anyIdInText(texId)  or hasTok(texId)))  or
-         (okC and (anyIdInText(tex)    or hasTok(tex))) then
-        return true
-      end
-    elseif isA(d,"MeshPart") then
-      local okA, meshId = pcall(function() return d.MeshId end)
-      local okB, texId  = pcall(function() return d.TextureID or d.TextureId end)
-      if (okA and (anyIdInText(meshId) or hasTok(meshId))) or
-         (okB and (anyIdInText(texId)  or hasTok(texId))) then
-        return true
-      end
-    elseif isA(d,"Decal") or isA(d,"Texture") then
-      local okT, tex = pcall(function() return d.Texture end)
-      if okT and (anyIdInText(tex) or hasTok(tex)) then
-        return true
-      end
-    elseif isA(d,"SurfaceAppearance") then
-      local okC, cMap = pcall(function() return d.ColorMap end)
-      local okM, mMap = pcall(function() return d.MetalnessMap end)
-      local okN, nMap = pcall(function() return d.NormalMap end)
-      local okR, rMap = pcall(function() return d.RoughnessMap end)
-      if (okC and (anyIdInText(cMap) or hasTok(cMap))) or
-         (okM and (anyIdInText(mMap) or hasTok(mMap))) or
-         (okN and (anyIdInText(nMap) or hasTok(nMap))) or
-         (okR and (anyIdInText(rMap) or hasTok(rMap))) then
-        return true
-      end
-    end
-  end
-  return false
-end
 
 local function nuke(x)
   if x and x.Parent then
@@ -130,7 +16,7 @@ local function stripChar(c)
   if not c then return end
   for _,d in ipairs(c:GetDescendants()) do
     if isA(d,"Accessory") then
-      if accessoryHit(d) then nuke(d) end
+      nuke(d)  -- Entfernt ALLE Accessories
     elseif isA(d,"WrapLayer") or isA(d,"WrapTarget") or isA(d,"SurfaceAppearance") then
       nuke(d)
     elseif isA(d,"Highlight") or isA(d,"ForceField") then
@@ -154,7 +40,7 @@ local function onChar(c)
   stripChar(c)
   c.DescendantAdded:Connect(function(d)
     if isA(d,"Accessory") then
-      if accessoryHit(d) then nuke(d) end
+      nuke(d)  -- Entfernt ALLE neuen Accessories
     elseif isA(d,"WrapLayer") or isA(d,"WrapTarget") or isA(d,"SurfaceAppearance") then
       nuke(d)
     elseif isA(d,"Highlight") or isA(d,"ForceField") then
@@ -194,7 +80,7 @@ end)
 -- Neue Charaktere die im Workspace erscheinen (Fallback)
 Workspace.ChildAdded:Connect(function(child)
   if isChar(child) then
-    task.wait(0.1) -- Kurz warten damit alles geladen ist
+    task.wait(0.1)
     onChar(child)
   end
 end)
