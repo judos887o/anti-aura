@@ -1,10 +1,8 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
-local LP = Players.LocalPlayer
 
 local function isA(x,c) return typeof(x)=="Instance" and x:IsA(c) end
-local function isChar(m) return m and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") end
 
 local function nuke(x)
   if x and x.Parent then
@@ -12,118 +10,58 @@ local function nuke(x)
   end
 end
 
-local function stripChar(c)
-  if not c then return end
-  for _,d in ipairs(c:GetDescendants()) do
-    if isA(d,"Accessory") then
-      nuke(d)  -- Entfernt ALLE Accessories
-    elseif isA(d,"WrapLayer") or isA(d,"WrapTarget") or isA(d,"SurfaceAppearance") then
-      nuke(d)
-    elseif isA(d,"Highlight") or isA(d,"ForceField") then
-      nuke(d)
-    elseif isA(d,"ParticleEmitter") or isA(d,"Sparkles") or isA(d,"Fire") or isA(d,"Smoke") then
-      nuke(d)
-    elseif isA(d,"Trail") or isA(d,"Beam") then
-      nuke(d)
-    elseif isA(d,"BillboardGui") or isA(d,"SurfaceGui") then
-      nuke(d)
-    elseif isA(d,"PointLight") or isA(d,"SpotLight") or isA(d,"SurfaceLight") then
-      nuke(d)
-    elseif isA(d,"Decal") or isA(d,"Texture") then
+-- Liste ALLER zu entfernenden Effekt-Typen
+local function shouldNuke(d)
+  return isA(d,"Accessory")
+    or isA(d,"WrapLayer") or isA(d,"WrapTarget") or isA(d,"SurfaceAppearance")
+    or isA(d,"Highlight") or isA(d,"ForceField")
+    or isA(d,"ParticleEmitter") or isA(d,"Sparkles") or isA(d,"Fire") or isA(d,"Smoke")
+    or isA(d,"Trail") or isA(d,"Beam")
+    or isA(d,"BillboardGui") or isA(d,"SurfaceGui")
+    or isA(d,"PointLight") or isA(d,"SpotLight") or isA(d,"SurfaceLight")
+    or isA(d,"Decal") or isA(d,"Texture")
+    or isA(d,"ArcHandles") or isA(d,"Handles")
+    or isA(d,"SelectionBox") or isA(d,"SelectionSphere")
+    or isA(d,"BoxHandleAdornment") or isA(d,"ConeHandleAdornment")
+    or isA(d,"CylinderHandleAdornment") or isA(d,"ImageHandleAdornment")
+    or isA(d,"LineHandleAdornment") or isA(d,"SphereHandleAdornment")
+end
+
+-- 1. Initiales Cleanup (nur EINMAL beim Start)
+task.spawn(function()
+  for _,d in ipairs(Workspace:GetDescendants()) do
+    if shouldNuke(d) then
       nuke(d)
     end
   end
-end
-
-local function onChar(c)
-  if not c then return end
-  stripChar(c)
-  c.DescendantAdded:Connect(function(d)
-    if isA(d,"Accessory") then
-      nuke(d)  -- Entfernt ALLE neuen Accessories
-    elseif isA(d,"WrapLayer") or isA(d,"WrapTarget") or isA(d,"SurfaceAppearance") then
-      nuke(d)
-    elseif isA(d,"Highlight") or isA(d,"ForceField") then
-      nuke(d)
-    elseif isA(d,"ParticleEmitter") or isA(d,"Sparkles") or isA(d,"Fire") or isA(d,"Smoke") then
-      nuke(d)
-    elseif isA(d,"Trail") or isA(d,"Beam") then
-      nuke(d)
-    elseif isA(d,"BillboardGui") or isA(d,"SurfaceGui") then
-      nuke(d)
-    elseif isA(d,"PointLight") or isA(d,"SpotLight") or isA(d,"SurfaceLight") then
-      nuke(d)
-    elseif isA(d,"Decal") or isA(d,"Texture") then
-      nuke(d)
-    end
-  end)
-end
-
--- ALLE bereits existierenden Charaktere im Workspace strippen
-for _,model in ipairs(Workspace:GetChildren()) do
-  if isChar(model) then
-    onChar(model)
-  end
-end
-
--- ALLE bereits verbundenen Spieler behandeln
-for _,p in ipairs(Players:GetPlayers()) do
-  if p.Character then onChar(p.Character) end
-  p.CharacterAdded:Connect(onChar)
-end
-
--- NEUE Spieler die joinen
-Players.PlayerAdded:Connect(function(p)
-  p.CharacterAdded:Connect(onChar)
 end)
 
--- Neue Charaktere die im Workspace erscheinen (Fallback)
-Workspace.ChildAdded:Connect(function(child)
-  if isChar(child) then
-    task.wait(0.1)
-    onChar(child)
-  end
-end)
-
+-- 2. HAUPTLISTENER - fängt ALLES ab was neu hinzugefügt wird
 Workspace.DescendantAdded:Connect(function(d)
-  if isA(d,"Highlight") or isA(d,"ForceField") then
-    local ok, ad = pcall(function() return d.Adornee end)
-    if ok and ad then
-      local m = ad:FindFirstAncestorOfClass("Model")
-      if isChar(m) then nuke(d) end
-    end
-  elseif d.ClassName=="ArcHandles" or d.ClassName=="Handles" then
+  if shouldNuke(d) then
     nuke(d)
   end
 end)
 
-for _,d in ipairs(Workspace:GetDescendants()) do
-  if isA(d,"Highlight") or isA(d,"ForceField") then
-    local ok, ad = pcall(function() return d.Adornee end)
-    if ok and ad then
-      local m = ad:FindFirstAncestorOfClass("Model")
-      if isChar(m) then nuke(d) end
-    end
-  elseif d.ClassName=="ArcHandles" or d.ClassName=="Handles" then
-    nuke(d)
-  end
-end
-
+-- 3. Lighting-Effekte blockieren
 for _,e in ipairs(Lighting:GetChildren()) do
-  if e:IsA("BloomEffect") or e:IsA("DepthOfFieldEffect") or e:IsA("ColorCorrectionEffect") or e:IsA("SunRaysEffect") or e:IsA("BlurEffect") then
+  if e:IsA("PostEffect") or e:IsA("Atmosphere") then
     nuke(e)
   end
 end
 
 Lighting.ChildAdded:Connect(function(e)
-  if e:IsA("BloomEffect") or e:IsA("DepthOfFieldEffect") or e:IsA("ColorCorrectionEffect") or e:IsA("SunRaysEffect") or e:IsA("BlurEffect") then
+  if e:IsA("PostEffect") or e:IsA("Atmosphere") then
     nuke(e)
   end
 end)
 
+-- 4. Lighting-Properties
 pcall(function()
   Lighting.GlobalShadows = false
   Lighting.EnvironmentDiffuseScale = 0
   Lighting.EnvironmentSpecularScale = 0
-  Lighting.Brightness = math.min(Lighting.Brightness, 1)
+  Lighting.Brightness = 1
 end)
+
+print("✅ Effekte entfernt - Performance-optimiert!")
