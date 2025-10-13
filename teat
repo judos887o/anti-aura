@@ -3,6 +3,7 @@ local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 
 local function isA(x,c) return typeof(x)=="Instance" and x:IsA(c) end
+local function isChar(m) return m and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChild("HumanoidRootPart") end
 
 local function nuke(x)
   if x and x.Parent then
@@ -10,8 +11,7 @@ local function nuke(x)
   end
 end
 
--- Liste ALLER zu entfernenden Effekt-Typen
-local function shouldNuke(d)
+local function shouldNukeFromChar(d)
   return isA(d,"Accessory")
     or isA(d,"WrapLayer") or isA(d,"WrapTarget") or isA(d,"SurfaceAppearance")
     or isA(d,"Highlight") or isA(d,"ForceField")
@@ -19,49 +19,87 @@ local function shouldNuke(d)
     or isA(d,"Trail") or isA(d,"Beam")
     or isA(d,"BillboardGui") or isA(d,"SurfaceGui")
     or isA(d,"PointLight") or isA(d,"SpotLight") or isA(d,"SurfaceLight")
-    or isA(d,"Decal") or isA(d,"Texture")
-    or isA(d,"ArcHandles") or isA(d,"Handles")
-    or isA(d,"SelectionBox") or isA(d,"SelectionSphere")
-    or isA(d,"BoxHandleAdornment") or isA(d,"ConeHandleAdornment")
-    or isA(d,"CylinderHandleAdornment") or isA(d,"ImageHandleAdornment")
-    or isA(d,"LineHandleAdornment") or isA(d,"SphereHandleAdornment")
 end
 
--- 1. Initiales Cleanup (nur EINMAL beim Start)
-task.spawn(function()
-  for _,d in ipairs(Workspace:GetDescendants()) do
-    if shouldNuke(d) then
+local function stripChar(c)
+  if not isChar(c) then return end
+  for _,d in ipairs(c:GetDescendants()) do
+    if shouldNukeFromChar(d) then
       nuke(d)
+    end
+  end
+end
+
+local function watchChar(c)
+  if not isChar(c) then return end
+  stripChar(c)
+  c.DescendantAdded:Connect(function(d)
+    if shouldNukeFromChar(d) then
+      nuke(d)
+    end
+  end)
+end
+
+-- 1. ALLE bestehenden Characters im Workspace behandeln
+for _,model in ipairs(Workspace:GetChildren()) do
+  if isChar(model) then
+    watchChar(model)
+  end
+end
+
+-- 2. Workspace: Neue Models überwachen (fängt Klone ab!)
+Workspace.ChildAdded:Connect(function(child)
+  if isChar(child) then
+    task.wait(0.05)
+    watchChar(child)
+  end
+end)
+
+-- 3. Players: Normale Spawns
+for _,p in ipairs(Players:GetPlayers()) do
+  if p.Character then watchChar(p.Character) end
+  p.CharacterAdded:Connect(watchChar)
+end
+
+Players.PlayerAdded:Connect(function(p)
+  p.CharacterAdded:Connect(watchChar)
+end)
+
+-- 4. Fallback: DescendantAdded für Effekte die direkt im Workspace spawnen
+Workspace.DescendantAdded:Connect(function(d)
+  if shouldNukeFromChar(d) then
+    -- Prüfe ob es in einem Character ist
+    local ancestor = d.Parent
+    while ancestor and ancestor ~= Workspace do
+      if isChar(ancestor) then
+        nuke(d)
+        return
+      end
+      ancestor = ancestor.Parent
     end
   end
 end)
 
--- 2. HAUPTLISTENER - fängt ALLES ab was neu hinzugefügt wird
-Workspace.DescendantAdded:Connect(function(d)
-  if shouldNuke(d) then
-    nuke(d)
-  end
-end)
-
--- 3. Lighting-Effekte blockieren
+-- 5. Lighting-Effekte (nur Post-Processing)
 for _,e in ipairs(Lighting:GetChildren()) do
-  if e:IsA("PostEffect") or e:IsA("Atmosphere") then
+  if e:IsA("BloomEffect") or e:IsA("BlurEffect") or e:IsA("ColorCorrectionEffect") 
+    or e:IsA("DepthOfFieldEffect") or e:IsA("SunRaysEffect") then
     nuke(e)
   end
 end
 
 Lighting.ChildAdded:Connect(function(e)
-  if e:IsA("PostEffect") or e:IsA("Atmosphere") then
+  if e:IsA("BloomEffect") or e:IsA("BlurEffect") or e:IsA("ColorCorrectionEffect") 
+    or e:IsA("DepthOfFieldEffect") or e:IsA("SunRaysEffect") then
     nuke(e)
   end
 end)
 
--- 4. Lighting-Properties
+-- 6. Lighting-Properties (moderat)
 pcall(function()
   Lighting.GlobalShadows = false
   Lighting.EnvironmentDiffuseScale = 0
   Lighting.EnvironmentSpecularScale = 0
-  Lighting.Brightness = 1
 end)
 
-print("✅ Effekte entfernt - Performance-optimiert!")
+print("✅ Nur Character-Effekte entfernt!")
